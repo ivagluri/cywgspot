@@ -1,0 +1,964 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>CYWG Spotter</title>
+<style>
+:root{
+  --bg:#f4f5f7; --card:#fff; --ink:#14171c; --dim:#5c6470; --line:#dfe3e8;
+  --accent:#0b6bcb; --accent-ink:#fff; --live:#137a4a; --warn:#a8590a; --bad:#b3261e;
+  --rwy:#8a939f; --rwy-active:#0b6bcb; --rwy-closed:#c6ccd4; --pin:#5c6470; --pin-best:#137a4a; --flow:#d9730d;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#0f1216; --card:#171c22; --ink:#e9edf2; --dim:#98a2b0; --line:#272e37;
+    --accent:#5aa9ff; --accent-ink:#08121e; --live:#4ed08a; --warn:#e0a458; --bad:#ff6f61;
+    --rwy:#6b7684; --rwy-active:#5aa9ff; --rwy-closed:#333c47; --pin:#98a2b0; --pin-best:#4ed08a; --flow:#ffab54;
+  }
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg); color:var(--ink);
+  font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  padding:12px 12px calc(28px + env(safe-area-inset-bottom));
+  max-width:640px; margin:0 auto; overflow-x:hidden;
+}
+h1{font-size:15px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin:4px 0 12px;font-weight:600}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:12px}
+.hero{text-align:center;padding:22px 16px}
+.call{font-size:clamp(30px,9vw,44px);font-weight:800;letter-spacing:-.02em;line-height:1.08;margin:0}
+.call .sep{color:var(--dim);font-weight:400;margin:0 .3em}
+.spot{font-size:clamp(19px,5.4vw,25px);font-weight:700;margin:14px 0 2px;color:var(--live)}
+.spot.none{color:var(--warn)}
+.spot-note{color:var(--dim);font-size:14px;margin-top:2px}
+.chips{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-top:14px}
+.chip{font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;
+  padding:4px 9px;border-radius:999px;border:1px solid var(--line);color:var(--dim);background:transparent}
+.chip.stated{background:var(--live);border-color:var(--live);color:#fff}
+.chip.inferred{background:var(--warn);border-color:var(--warn);color:#fff}
+.chip.marginal{background:var(--bad);border-color:var(--bad);color:#fff}
+.chip.stale{background:var(--bad);border-color:var(--bad);color:#fff}
+h2{font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:var(--dim);margin:0 0 10px;font-weight:700}
+svg{display:block;max-width:100%;height:auto;margin:0 auto}
+.legend{margin-top:14px;border-top:1px solid var(--line);padding-top:10px}
+.lg{display:flex;align-items:baseline;gap:8px;padding:4px 0;font-size:13px;color:var(--dim)}
+.lg .dot{flex:0 0 9px;height:9px;border-radius:50%;background:var(--pin);transform:translateY(-1px)}
+.lg .nm{font-weight:600;color:var(--ink)}
+.lg .rl{margin-left:auto;font-size:11.5px;white-space:nowrap}
+.lg.best .dot{background:var(--pin-best)}
+.lg.best .nm{color:var(--pin-best);font-weight:800}
+p{margin:0 0 8px}
+p:last-child{margin-bottom:0}
+ul{margin:0;padding-left:20px}
+li{margin-bottom:5px}
+li:last-child{margin-bottom:0}
+textarea{
+  width:100%;min-height:130px;font:13px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  padding:11px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);
+  resize:vertical;-webkit-appearance:none;
+}
+.btns{display:flex;gap:8px;margin-top:10px}
+button{
+  flex:1;min-height:48px;font-size:16px;font-weight:600;border-radius:10px;cursor:pointer;
+  border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);
+}
+button.ghost{background:transparent;color:var(--dim);border-color:var(--line);flex:0 0 34%}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{text-align:right;padding:6px 4px;border-bottom:1px solid var(--line)}
+th:first-child,td:first-child{text-align:left;font-weight:700}
+th{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--dim);font-weight:600}
+tr:last-child td{border-bottom:none}
+tr.win td{color:var(--live)}
+tr.shut td{color:var(--dim);text-decoration:line-through}
+details{margin-top:10px}
+details+details{margin-top:8px}
+summary{cursor:pointer;font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:var(--dim);font-weight:700;padding:6px 0}
+pre{white-space:pre-wrap;word-break:break-word;font:12px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;
+  color:var(--dim);background:var(--bg);padding:10px;border-radius:8px;margin:8px 0 0;overflow-x:auto}
+.err{color:var(--bad);font-weight:600}
+.muted{color:var(--dim);font-size:13px}
+.kv{display:flex;justify-content:space-between;gap:12px;padding:5px 0;border-bottom:1px solid var(--line);font-size:14px}
+.kv:last-child{border-bottom:none}
+.kv span:first-child{color:var(--dim)}
+.kv span:last-child{text-align:right;font-weight:600}
+.sun-warn{color:var(--warn);font-weight:600}
+footer{color:var(--dim);font-size:12px;text-align:center;margin-top:16px;line-height:1.6}
+</style>
+</head>
+<body>
+
+<h1>CYWG Spotter</h1>
+
+<div id="out"></div>
+
+<div class="card">
+  <h2>Paste ATIS</h2>
+  <textarea id="in" placeholder="Paste CYWG ARR or DEP ATIS here.&#10;METAR, TAF and RSC NOTAM text also work." spellcheck="false" autocapitalize="characters"></textarea>
+  <div class="btns">
+    <button id="go">Decode</button>
+    <button id="clr" class="ghost">Clear</button>
+  </div>
+  <p class="muted" style="margin-top:10px">Works fully offline — nothing is ever sent anywhere.</p>
+</div>
+
+<footer>
+  Runway geometry from OurAirports · elevation 783 ft · winds treated as true<br>
+  Planning aid only — not for flight use.
+</footer>
+
+<script>
+"use strict";
+
+/* ─────────────────────────── reference data ─────────────────────────── */
+
+const FIELD = { lat: 49.9105, lon: -97.2397, elev: 783 };
+
+// True headings + threshold coords. Winds from METAR/D-ATIS are TRUE, so these
+// are compared directly with no magnetic-variation correction (see README).
+const ENDS = {
+  "13": { hdg: 137.0, lat: 49.9128,  lon: -97.2522,  rwy: "13/31", len: 8841 },
+  "31": { hdg: 317.0, lat: 49.8953,  lon: -97.2272,  rwy: "13/31", len: 8841 },
+  "18": { hdg: 189.3, lat: 49.9253,  lon: -97.2342,  rwy: "18/36", len: 11000 },
+  "36": { hdg:   9.3, lat: 49.8956,  lon: -97.2417,  rwy: "18/36", len: 11000 }
+};
+
+// Permanently closed — drawn dashed, never selectable.
+const CLOSED_RWY = { name: "07/25", a: {lat:49.9086, lon:-97.2353}, b: {lat:49.9117, lon:-97.2169} };
+
+// Spotting locations keyed by RUNWAY END. A spot at end E sits off that end, so it
+// serves arrivals landing on E and departures on the reciprocal climbing out over it.
+const SPOTS = {
+  "36": { name:"Ness Ave Tim Hortons",          lat:49.885906, lon:-97.244374 },
+  "31": { name:"St James Memorial Sports Park", lat:49.8896,   lon:-97.2214   },
+  "18": { name:"Brookside Blvd",                lat:49.923624, lon:-97.229640,
+          range:"roadside pull-offs, 49.9307 to 49.9165" },
+  "13": null   // no good spot found yet
+};
+
+const recip = r => String(((parseInt(r,10) + 18 - 1) % 36) + 1).padStart(2,"0");
+
+// Short tags for the map pins; full names live in the legend beneath it.
+const SPOT_TAG = { "36":"Tims", "31":"St James Park", "18":"Brookside" };
+
+/* ─────────────────────────── small helpers ─────────────────────────── */
+
+const rad = d => d * Math.PI / 180;
+const deg = r => r * 180 / Math.PI;
+const norm360 = d => ((d % 360) + 360) % 360;
+// smallest absolute angle between two bearings, 0..180
+const angDiff = (a,b) => { const d = Math.abs(norm360(a) - norm360(b)); return d > 180 ? 360 - d : d; };
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const compass = b => ["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"][Math.round(norm360(b)/22.5)%16];
+
+/* THE critical normalization. The real feed hard-wraps mid-report at an arbitrary
+   column, and the wrap width differs between ARR and DEP. Never parse line-wise. */
+function normalize(text){
+  return String(text||"").replace(/\r/g," ").replace(/\s+/g," ").trim().toUpperCase();
+}
+
+/* ─────────────────────────── METAR body parser ─────────────────────────── */
+/* Shared by raw METAR and by the D-ATIS weather segment (which is a METAR body
+   with a bare CIG token inserted before the ceiling layers). */
+
+function parseWeatherBody(body){
+  const t = normalize(body).split(" ");
+  const w = { clouds: [], raw: normalize(body) };
+
+  for (let i = 0; i < t.length; i++){
+    const tok = t[i];
+    if (!tok || tok === "CIG" || tok === "AUTO" || tok === "COR") continue;
+    if (tok === "RMK") { w.rmk = t.slice(i+1).join(" "); break; }
+
+    let m;
+    if ((m = tok.match(/^(\d{3}|VRB)(\d{2,3})(?:G(\d{2,3}))?(KT|MPS)$/))){
+      w.windDir  = m[1] === "VRB" ? null : parseInt(m[1],10);
+      w.windVrb  = m[1] === "VRB";
+      w.windSpd  = parseInt(m[2],10);
+      w.windGust = m[3] ? parseInt(m[3],10) : null;
+      if (m[4] === "MPS"){ w.windSpd = Math.round(w.windSpd*1.94384); if(w.windGust) w.windGust = Math.round(w.windGust*1.94384); }
+      continue;
+    }
+    if ((m = tok.match(/^(\d{3})V(\d{3})$/))){ w.vrbFrom = +m[1]; w.vrbTo = +m[2]; continue; }
+    if ((m = tok.match(/^([PM])?(\d{1,2})SM$/))){
+      w.vis = +m[2]; w.visPrefix = m[1] || null; continue;
+    }
+    if ((m = tok.match(/^([PM])?(\d{1,2})\/(\d{1,2})SM$/))){          // e.g. 1/2SM
+      w.vis = +m[2]/+m[3]; w.visPrefix = m[1] || null; continue;
+    }
+    if (/^\d{1,2}$/.test(tok) && /^\d{1,2}\/\d{1,2}SM$/.test(t[i+1]||"")){  // e.g. "1 1/2SM"
+      const f = t[i+1].match(/^(\d{1,2})\/(\d{1,2})SM$/);
+      w.vis = +tok + (+f[1]/+f[2]); i++; continue;
+    }
+    if ((m = tok.match(/^(SKC|CLR|NCD|NSC)$/))){ w.clearSky = true; continue; }
+    if ((m = tok.match(/^(FEW|SCT|BKN|OVC|VV)(\d{3})(CB|TCU)?$/))){
+      w.clouds.push({ amt:m[1], ft:+m[2]*100, type:m[3]||null }); continue;
+    }
+    if ((m = tok.match(/^(M?\d{2})\/(M?\d{2})$/))){
+      w.temp = parseInt(m[1].replace("M","-"),10);
+      w.dew  = parseInt(m[2].replace("M","-"),10); continue;
+    }
+    if ((m = tok.match(/^A(\d{4})$/))){ w.altim = +m[1]/100; continue; }
+    if ((m = tok.match(/^Q(\d{4})$/))){ w.qnh = +m[1]; continue; }
+    if ((m = tok.match(/^(\d{6})Z$/))){ w.timeTok = tok; continue; }
+  }
+
+  if (w.rmk){
+    const d = w.rmk.match(/DENSITY ALT (\d+)FT/);
+    if (d) w.densityAlt = +d[1];
+  }
+  // ceiling = lowest broken/overcast/vertical-vis layer
+  const ceilLayer = w.clouds.filter(c => c.amt==="BKN"||c.amt==="OVC"||c.amt==="VV").sort((a,b)=>a.ft-b.ft)[0];
+  w.ceiling = ceilLayer ? ceilLayer.ft : null;
+  w.cat = flightCategory(w);
+  return w;
+}
+
+function flightCategory(w){
+  const c = w.ceiling === null ? Infinity : w.ceiling;
+  const v = w.vis === undefined ? Infinity : (w.visPrefix === "P" ? w.vis + 1 : w.vis);
+  if (c < 500  || v < 1) return "LIFR";
+  if (c < 1000 || v < 3) return "IFR";
+  if (c <= 3000|| v <= 5) return "MVFR";
+  return "VFR";
+}
+
+/* ─────────────────────────── D-ATIS parser ─────────────────────────── */
+
+const ATIS_HDR = /CYWG (ARR|DEP) ATIS ([A-Z]) (\d{4})Z/g;
+
+function parseAtis(text){
+  const s = normalize(text);
+  ATIS_HDR.lastIndex = 0;
+  const hdrs = [];
+  let m;
+  while ((m = ATIS_HDR.exec(s)) !== null){
+    hdrs.push({ type:m[1], letter:m[2], time:m[3], start:m.index, end:m.index + m[0].length });
+  }
+  if (!hdrs.length) return null;
+
+  // Segment header→next-header. The DEP ATIS wraps the ARR ATIS verbatim, so the
+  // DEP segment comes out empty; keep only segments carrying real content.
+  const segs = hdrs.map((h,i) => ({
+    ...h,
+    body: s.slice(h.end, i+1 < hdrs.length ? hdrs[i+1].start : s.length).trim()
+  }));
+  const meaty = segs.filter(x => /(\d{3}|VRB)\d{2}(G\d{2,3})?KT|\bRWY \d{2}/.test(x.body));
+  if (!meaty.length) return null;
+
+  const arr = meaty.find(x => x.type === "ARR") || meaty[0];
+  const dep = meaty.find(x => x.type === "DEP" && x !== arr);
+
+  const a = {
+    letter: arr.letter,
+    time: arr.time,
+    sources: [...new Set(segs.map(x => x.type))],
+    raw: s
+  };
+
+  // weather body runs from the header up to the first non-weather keyword
+  const cut = arr.body.search(/\b(APCH|LDG|DEP RWY|RSC|NOTAM)\b/);
+  a.wx = parseWeatherBody(cut > 0 ? arr.body.slice(0, cut) : arr.body);
+
+  // approach(es) in use — "APCH RNAV Z OR Y OR ILS RWY 13, INFORM ARRL OF ..."
+  const ap = arr.body.match(/\bAPCH ([^.]*?)(?:,\s*INFORM\b|\.|$)/);
+  if (ap) a.approach = ap[1].trim();
+
+  Object.assign(a, parseRunwayStatement(arr.body));
+  if (dep){
+    const d = parseRunwayStatement(dep.body);
+    if (d.departing) { a.departing = d.departing; a.rwyPhrase = (a.rwyPhrase||"") + " / " + (d.rwyPhrase||""); }
+  }
+
+  a.rsc = parseRsc(arr.body);
+  a.closures = parseClosures(arr.body);
+  a.remarks = extractRemarks(arr.body);
+  return a;
+}
+
+/* "LDG AND DEP RWY 13." / "LDG RWY 31. DEP RWY 18." / "RWY 13 AND 31" */
+function parseRunwayStatement(body){
+  const list = str => (str.match(/\d{2}[LRC]?/g) || []);
+  let m;
+  if ((m = body.match(/\bLDG AND DEP RWY ((?:\d{2}[LRC]?)(?:\s*(?:AND|,|\/)\s*\d{2}[LRC]?)*)/))){
+    const r = list(m[1]);
+    return { landing:r, departing:r, rwyPhrase:m[0].trim(), rwyStated:true };
+  }
+  const out = { rwyStated:false };
+  const parts = [];
+  if ((m = body.match(/\bLDG RWY ((?:\d{2}[LRC]?)(?:\s*(?:AND|,|\/)\s*\d{2}[LRC]?)*)/))){
+    out.landing = list(m[1]); out.rwyStated = true; parts.push(m[0].trim());
+  }
+  if ((m = body.match(/\bDEP RWY ((?:\d{2}[LRC]?)(?:\s*(?:AND|,|\/)\s*\d{2}[LRC]?)*)/))){
+    out.departing = list(m[1]); out.rwyStated = true; parts.push(m[0].trim());
+  }
+  if (parts.length) out.rwyPhrase = parts.join(". ");
+  return out;
+}
+
+/* ─────────────────────────── RSC / CRFI ─────────────────────────── */
+
+const RSC_CODE = {
+  6:"good braking", 5:"good braking", 4:"good to medium braking",
+  3:"medium braking", 2:"medium to poor braking", 1:"poor braking",
+  0:"nil braking — very slippery"
+};
+
+function parseRsc(text){
+  const s = normalize(text);
+  const out = [];
+  const re = /\bRSC (\d{2}[LRC]?)\s+([\d]\/[\d]\/[\d]|NIL|[\d]{1,2})\s*([^.]*)\./g;
+  let m;
+  while ((m = re.exec(s)) !== null){
+    const codes = m[2].split("/").map(x => parseInt(x,10)).filter(n => !isNaN(n));
+    out.push({
+      rwy: m[1],
+      codes,
+      worst: codes.length ? Math.min(...codes) : null,
+      desc: (m[3]||"").replace(/,\s*/g,", ").trim().toLowerCase()
+    });
+  }
+  const crfi = s.match(/\bCRFI\s*\.?(\d{2})/);
+  const valid = s.match(/\bVALID ([A-Z]{3} \d{2} \d{4}) - ([A-Z]{3} \d{2} \d{4})/);
+  return { runways: out, crfi: crfi ? +("0."+crfi[1]) : null, valid: valid ? `${valid[1]} – ${valid[2]}Z` : null };
+}
+
+function rscLine(r){
+  const code = r.worst === null ? "" : ` (code ${r.worst} — ${RSC_CODE[r.worst] || "see raw"})`;
+  const uniq = [...new Set(r.desc.split(",").map(x=>x.trim()).filter(Boolean))];
+  return `Runway ${r.rwy}: ${uniq.join(", ") || "reported"}${code}`;
+}
+
+/* ─────────────────────────── NOTAM closures ─────────────────────────── */
+
+function parseClosures(text){
+  const s = normalize(text);
+  const shut = new Set();
+  let m;
+  const re = /\bRWY (\d{2}[LRC]?)(?:\s*\/\s*(\d{2}[LRC]?))? CLSD/g;
+  while ((m = re.exec(s)) !== null){
+    for (const r of [m[1], m[2]]) if (r){ shut.add(r); shut.add(recip(r)); }
+  }
+  return [...shut].filter(r => ENDS[r]);
+}
+
+/* ─────────────────────────── remarks ─────────────────────────── */
+
+const ABBR = {
+  ACT:"activity", ACFT:"aircraft", ADZ:"advise", ANTCPTD:"anticipated", APCH:"approach",
+  APN:"apron", ARPT:"airport", ARR:"arrival", ARRL:"arrival", AVBL:"available",
+  BLO:"below", CLSD:"closed", CTC:"contact", DEMANDS:"demands", DEP:"departure",
+  EXC:"except", FLT:"flight", HR:"hours", INVOF:"in the vicinity of", LDG:"landing",
+  MAINT:"maintenance", MIN:"minutes", OPS:"operations", PPR:"prior permission required",
+  REQ:"requested", RMN:"remain", RWY:"runway", SVC:"service", SYS:"system",
+  TFC:"traffic", TIL:"until", TML:"terminal", TRG:"training", TWY:"taxiway",
+  U_S:"unserviceable", WEF:"with effect from", WTN:"within", XING:"crossing"
+};
+const KEEP_UP = new Set(["VFR","IFR","ATC","CYWG","MSL","AGL","TCA","CZWG","RSC","CRFI","SM","ILS","RNAV","GPS","NDB","VOR","CB","TCU","NOTAM","UTC"]);
+
+// sentences already consumed by a dedicated parser
+const CONSUMED = /^(CYWG |APCH |INFORM ARRL|LDG |DEP RWY|RSC |VALID |INFORM CYWG ATC)/;
+
+function extractRemarks(body){
+  return normalize(body)
+    .replace(/\.\s+/g, ".\u0000")
+    .split("\u0000")
+    .map(x => x.trim())
+    .filter(x => x.length > 6 && !CONSUMED.test(x) && !/^\d/.test(x))
+    .map(expandAbbr);
+}
+
+const PHRASES = [[/\bINVOF ARPT\b/g, "INVOF THE ARPT"]];
+
+function expandAbbr(sentence){
+  for (const [re, to] of PHRASES) sentence = sentence.replace(re, to);
+  const words = sentence.split(/(\s+)/).map(tok => {
+    if (/^\s+$/.test(tok)) return tok;
+    const bare = tok.replace(/[.,]+$/,"");
+    const tail = tok.slice(bare.length);
+    if (KEEP_UP.has(bare)) return bare + tail;
+    if (ABBR[bare]) return ABBR[bare] + tail;
+    let m;
+    if ((m = bare.match(/^(\d+)FT$/)))   return `${m[1]} ft${tail}`;
+    if ((m = bare.match(/^(\d+)KTS?$/))) return `${m[1]} kt${tail}`;
+    if (/^\d/.test(bare)) return bare + tail;
+    return bare.toLowerCase() + tail;
+  }).join("");
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+/* ─────────────────────────── TAF ─────────────────────────── */
+
+function parseTaf(text){
+  const s = normalize(text);
+  const i = s.indexOf("TAF ");
+  if (i < 0) return null;
+  let body = s.slice(i);
+  const rmk = body.indexOf(" RMK ");
+  if (rmk > 0) body = body.slice(0, rmk);
+
+  // split into change groups, keeping the marker with its group
+  const marked = body.replace(/\b(FM\d{6}|BECMG \d{4}\/\d{4}|TEMPO \d{4}\/\d{4}|PROB\d{2} \d{4}\/\d{4})/g, "$1");
+  const cuts = [];
+  let mk;
+  const reMark = /\b(FM\d{6}|BECMG \d{4}\/\d{4}|TEMPO \d{4}\/\d{4}|PROB\d{2} \d{4}\/\d{4})\b/g;
+  while ((mk = reMark.exec(marked)) !== null) cuts.push(mk.index);
+  const chunks = [];
+  let cstart = 0;
+  for (const c of cuts){ if (c > cstart) chunks.push(marked.slice(cstart, c)); cstart = c; }
+  chunks.push(marked.slice(cstart));
+  const groups = [];
+  chunks.forEach((c, idx) => {
+    c = c.trim();
+    if (!c) return;
+    let label = null, at = null, type = "BASE";
+    let m;
+    if ((m = c.match(/^FM(\d{2})(\d{2})(\d{2})/))){ type="FM"; at={day:+m[1],hr:+m[2],min:+m[3]}; label=`from ${m[2]}${m[3]}Z`; }
+    else if ((m = c.match(/^(BECMG|TEMPO|PROB\d{2}) (\d{2})(\d{2})\/(\d{2})(\d{2})/))){
+      type = m[1]; at = {day:+m[2], hr:+m[3], min:0};
+      label = `${m[1].toLowerCase()} ${m[3]}00Z–${m[5]}00Z`;
+    } else if (idx === 0){ label = "now"; }
+    const wx = parseWeatherBody(c);
+    if (wx.windSpd === undefined) return;
+    groups.push({ type, label, at, wx });
+  });
+  return groups.length ? groups : null;
+}
+
+/* ─────────────────────────── runway selection ─────────────────────────── */
+
+function components(wx, closed){
+  const shut = new Set(closed || []);
+  return Object.keys(ENDS).map(r => {
+    const e = ENDS[r];
+    if (wx.windDir === null || wx.windDir === undefined || !wx.windSpd){
+      return { rwy:r, head:0, cross:0, closed:shut.has(r) };
+    }
+    const d = rad(wx.windDir - e.hdg);
+    return {
+      rwy: r,
+      head: wx.windSpd * Math.cos(d),
+      cross: Math.abs(wx.windSpd * Math.sin(d)),
+      crossSigned: wx.windSpd * Math.sin(d),
+      closed: shut.has(r)
+    };
+  });
+}
+
+function inferRunway(wx, closed){
+  const comp = components(wx, closed).filter(c => !c.closed);
+  if (!comp.length) return { comp:[], runway:null, confidence:"unknown", why:"every runway is closed" };
+
+  const sorted = [...comp].sort((a,b) =>
+    (b.head - a.head) || (ENDS[b.rwy].len - ENDS[a.rwy].len));   // ties → the 11,000 ft runway
+  const best = sorted[0], next = sorted[1];
+
+  let confidence = "confident";
+  let why = `${wx.windDir}° at ${wx.windSpd} kt gives ${best.head.toFixed(0)} kt down ${best.rwy}`;
+  if (wx.windVrb || !wx.windSpd || wx.windSpd < 5){
+    confidence = "marginal";
+    why = wx.windVrb ? "wind is variable in direction" : `wind is only ${wx.windSpd||0} kt`;
+  } else if (next && (best.head - next.head) < 2){
+    confidence = "marginal";
+    why = `${best.rwy} and ${next.rwy} are within ${(best.head-next.head).toFixed(1)} kt of each other`;
+  }
+  return { comp: components(wx, closed), runway: best.rwy, confidence, why };
+}
+
+/* ─────────────────────────── spots ─────────────────────────── */
+/* Arrivals on end E are watched from the spot at E. Departures on runway D climb
+   out over the far end, so they are watched from the spot at recip(D). */
+
+function pickSpots(landing, departing){
+  const arrEnd = landing ? landing[0] : null;
+  const depEnd = departing ? recip(departing[0]) : null;
+  return {
+    arrival:   arrEnd ? { end:arrEnd, spot:SPOTS[arrEnd] } : null,
+    departure: depEnd ? { end:depEnd, spot:SPOTS[depEnd] } : null
+  };
+}
+
+/* ─────────────────────────── sun ─────────────────────────── */
+
+function sunPosition(date, lat, lon){
+  const n = date.getTime()/86400000 + 2440587.5 - 2451545.0;
+  const L = norm360(280.460 + 0.9856474*n);
+  const g = rad(norm360(357.528 + 0.9856003*n));
+  const lam = rad(L + 1.915*Math.sin(g) + 0.020*Math.sin(2*g));
+  const eps = rad(23.439 - 0.0000004*n);
+  const ra  = Math.atan2(Math.cos(eps)*Math.sin(lam), Math.cos(lam));
+  const dec = Math.asin(Math.sin(eps)*Math.sin(lam));
+  const gmst = norm360((18.697374558 + 24.06570982441908*n) * 15);
+  const lmst = rad(norm360(gmst + lon));
+  const H = lmst - ra;
+  const la = rad(lat);
+  const el = Math.asin(Math.sin(la)*Math.sin(dec) + Math.cos(la)*Math.cos(dec)*Math.cos(H));
+  const az = norm360(deg(Math.atan2(-Math.sin(H)*Math.cos(dec),
+                Math.cos(la)*Math.sin(dec) - Math.sin(la)*Math.cos(dec)*Math.cos(H))));
+  return { az, el: deg(el) };
+}
+
+/* Viewing bearing from a spot at end E:
+   arrivals land toward E.hdg, so they approach from behind you → look back down
+   the approach at E.hdg+180. Departures run at you from the far end → look at E.hdg. */
+function sunAdvice(endId, mode, when){
+  const e = ENDS[endId];
+  if (!e) return null;
+  const view = mode === "arrival" ? norm360(e.hdg + 180) : e.hdg;
+  const s = sunPosition(when, FIELD.lat, FIELD.lon);
+  if (s.el < -6)  return { s, view, text:"Dark — sun is well below the horizon." };
+  if (s.el < 0)   return { s, view, text:"Twilight — sun just below the horizon." };
+  const off = angDiff(s.az, view);
+  if (off < 45 && s.el < 35)
+    return { s, view, bad:true, text:`Shooting into the sun — it sits ${off.toFixed(0)}° off your view at ${s.el.toFixed(0)}° up.` };
+  if (off > 135)
+    return { s, view, text:`Sun behind you — well lit from this angle.` };
+  return { s, view, text:`Sun ${compass(s.az)} at ${s.el.toFixed(0)}° up, ${off.toFixed(0)}° off your view.` };
+}
+
+/* ─────────────────────────── time ─────────────────────────── */
+
+/* ATIS carries HHMM only; METAR carries DDHHMM. Resolve to the most recent past
+   occurrence so a stale paste can never look current. */
+function resolveZulu(tok){
+  const now = new Date();
+  let d, h, mi;
+  if (/^\d{6}$/.test(tok)){ d=+tok.slice(0,2); h=+tok.slice(2,4); mi=+tok.slice(4,6); }
+  else if (/^\d{4}$/.test(tok)){ d=null; h=+tok.slice(0,2); mi=+tok.slice(2,4); }
+  else return null;
+
+  const t = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(),
+                              d === null ? now.getUTCDate() : d, h, mi));
+  if (t - now > 60*60*1000) t.setUTCDate(t.getUTCDate() - (d === null ? 1 : 0));
+  if (d !== null && t - now > 60*60*1000) t.setUTCMonth(t.getUTCMonth() - 1);
+  return t;
+}
+
+function ageText(t){
+  if (!t) return "";
+  const mins = Math.round((Date.now() - t.getTime())/60000);
+  if (mins < 0) return "just issued";
+  if (mins < 60) return `${mins} min ago`;
+  const h = Math.floor(mins/60);
+  return `${h}h ${mins%60}m ago`;
+}
+
+/* ─────────────────────────── plain-English weather ─────────────────────────── */
+
+const AMT = { FEW:"few clouds", SCT:"scattered cloud", BKN:"broken cloud", OVC:"overcast", VV:"vertical visibility" };
+
+function wxSentence(wx){
+  const bits = [];
+  if (wx.windSpd === 0) bits.push("Wind calm");
+  else if (wx.windSpd !== undefined){
+    let s = wx.windVrb ? `Wind variable at ${wx.windSpd} kt`
+                       : `Wind ${String(wx.windDir).padStart(3,"0")}°T at ${wx.windSpd} kt`;
+    if (wx.windGust) s += `, gusting ${wx.windGust}`;
+    if (wx.vrbFrom !== undefined) s += ` (varying ${wx.vrbFrom}°–${wx.vrbTo}°)`;
+    bits.push(s);
+  }
+  if (wx.vis !== undefined){
+    const p = wx.visPrefix === "P" ? "more than " : wx.visPrefix === "M" ? "less than " : "";
+    bits.push(`visibility ${p}${wx.vis} SM`);
+  }
+  if (wx.clearSky) bits.push("sky clear");
+  else if (wx.clouds.length){
+    bits.push(wx.clouds.map(c => `${AMT[c.amt]||c.amt} at ${c.ft.toLocaleString()} ft${c.type==="CB"?" (cumulonimbus)":""}`).join(", "));
+  }
+  if (wx.temp !== undefined) bits.push(`${wx.temp}°C, dewpoint ${wx.dew}°C`);
+  if (wx.altim !== undefined) bits.push(`altimeter ${wx.altim.toFixed(2)}`);
+  return bits.join(", ").replace(/^./, c => c.toUpperCase()) + ".";
+}
+
+/* ─────────────────────────── aerodrome diagram ─────────────────────────── */
+
+function project(pts){
+  const kmPerDegLat = 111.32;
+  const kmPerDegLon = 111.32 * Math.cos(rad(FIELD.lat));
+  return pts.map(p => ({
+    ...p,
+    x: (p.lon - FIELD.lon) * kmPerDegLon,
+    y: -(p.lat - FIELD.lat) * kmPerDegLat      // screen y grows downward
+  }));
+}
+
+function diagram(state){
+  const active = state.landing ? state.landing[0] : null;
+  const activeRwy = active ? ENDS[active].rwy : null;
+  const shut = new Set(state.closures || []);
+
+  const nodes = [];
+  for (const r of Object.keys(ENDS)) nodes.push({ id:r, kind:"end", lat:ENDS[r].lat, lon:ENDS[r].lon });
+  nodes.push({ id:"c1", kind:"x", ...CLOSED_RWY.a }, { id:"c2", kind:"x", ...CLOSED_RWY.b });
+  for (const k of Object.keys(SPOTS)) if (SPOTS[k]) nodes.push({ id:k, kind:"spot", ...SPOTS[k] });
+
+  const P = project(nodes);
+  const at = id => P.find(p => p.id === id && p.kind !== "spot");
+  const sp = id => P.find(p => p.id === id && p.kind === "spot");
+
+  const PAD = 0.45;                       // km of breathing room
+  const core = P.filter(p => p.kind !== "spot");
+  let minX = Math.min(...core.map(p=>p.x))-PAD, maxX = Math.max(...core.map(p=>p.x))+PAD;
+  let minY = Math.min(...core.map(p=>p.y))-PAD, maxY = Math.max(...core.map(p=>p.y))+PAD;
+
+  // Nearest spots first; a spot that would stretch the frame past 1.9:1 is pushed
+  // to the edge instead, so one distant location can't shrink the aerodrome.
+  const spots = P.filter(p => p.kind === "spot")
+                 .map(p => ({ ...p, d: Math.hypot(p.x, p.y) }))
+                 .sort((a,b) => a.d - b.d);
+  const offMap = new Set();
+  for (const sPt of spots){
+    const nx0 = Math.min(minX, sPt.x-PAD), nx1 = Math.max(maxX, sPt.x+PAD);
+    const ny0 = Math.min(minY, sPt.y-PAD), ny1 = Math.max(maxY, sPt.y+PAD);
+    if ((ny1-ny0)/(nx1-nx0) > 1.9){ offMap.add(sPt.id); continue; }
+    minX = nx0; maxX = nx1; minY = ny0; maxY = ny1;
+  }
+
+  const w = maxX-minX, h = maxY-minY;
+  // Equal px-per-km on both axes (no distortion), sized so the intrinsic SVG is
+  // close to its displayed size — otherwise the browser scales the labels up too.
+  const S = Math.min(400/w, 520/h);
+  const W = w*S, H0 = h*S;
+
+  // Off-map markers live in their own strip so they never sit on a runway label.
+  const offList = spots.filter(x => offMap.has(x.id));
+  const GUT = 36;
+  const gutTop = offList.some(x => x.y < minY) ? GUT : 0;
+  const gutBot = offList.some(x => x.y > maxY) ? GUT : 0;
+  const H = H0 + gutTop + gutBot;
+
+  const X = v => (v-minX)*S, Y = v => (v-minY)*S + gutTop;
+  const clamp = (v,lo,hi) => Math.max(lo, Math.min(hi, v));
+
+  const g = [];
+  g.push(`<rect x="0" y="0" width="${W.toFixed(1)}" height="${H.toFixed(1)}" fill="none"/>`);
+
+  // closed 07/25
+  const c1=at("c1"), c2=at("c2");
+  g.push(`<line x1="${X(c1.x)}" y1="${Y(c1.y)}" x2="${X(c2.x)}" y2="${Y(c2.y)}"
+            stroke="var(--rwy-closed)" stroke-width="5" stroke-dasharray="7 6" stroke-linecap="round"/>`);
+
+  // the two live runways
+  for (const [a,b] of [["13","31"],["18","36"]]){
+    const pa=at(a), pb=at(b);
+    const isActive = activeRwy === ENDS[a].rwy;
+    const isShut = shut.has(a) || shut.has(b);
+    const col = isShut ? "var(--rwy-closed)" : isActive ? "var(--rwy-active)" : "var(--rwy)";
+    g.push(`<line x1="${X(pa.x)}" y1="${Y(pa.y)}" x2="${X(pb.x)}" y2="${Y(pb.y)}"
+              stroke="${col}" stroke-width="${isActive?13:9}" stroke-linecap="butt"
+              ${isShut?'stroke-dasharray="9 7"':""} opacity="${isActive?1:.85}"/>`);
+    if (isActive && !isShut){
+      g.push(`<line x1="${X(pa.x)}" y1="${Y(pa.y)}" x2="${X(pb.x)}" y2="${Y(pb.y)}"
+                stroke="var(--card)" stroke-width="1.6" stroke-dasharray="7 8" opacity=".85"/>`);
+    }
+  }
+
+  // landing-direction arrow along the active runway
+  if (active && !shut.has(active)){
+    const from = at(active), to = at(recip(active));
+    const dx = X(to.x)-X(from.x), dy = Y(to.y)-Y(from.y);
+    const L = Math.hypot(dx,dy), ux = dx/L, uy = dy/L;
+    // Offset alongside the runway: beyond the threshold it collided with the
+    // runway-end label, and drawn on the centreline it vanished into the stroke.
+    const ox = -uy*17, oy = ux*17;
+    const cx0 = X(from.x)+ux*L*0.72+ox, cy0 = Y(from.y)+uy*L*0.72+oy;
+    const tipX = cx0+ux*13, tipY = cy0+uy*13;
+    const back = 13, wing = 7;
+    g.push(`<line x1="${(cx0-ux*15).toFixed(1)}" y1="${(cy0-uy*15).toFixed(1)}"
+              x2="${tipX.toFixed(1)}" y2="${tipY.toFixed(1)}"
+              stroke="var(--flow)" stroke-width="2.4" stroke-linecap="round"/>`);
+    g.push(`<polygon points="${tipX},${tipY} ${tipX-ux*back-uy*wing},${tipY-uy*back+ux*wing} ${tipX-ux*back+uy*wing},${tipY-uy*back-ux*wing}"
+              fill="var(--flow)"/>`);
+  }
+
+  // threshold labels
+  for (const r of Object.keys(ENDS)){
+    const p = at(r);
+    const e = ENDS[r];
+    const off = 15;
+    const lx = X(p.x) - Math.sin(rad(e.hdg))*off;
+    const ly = Y(p.y) + Math.cos(rad(e.hdg))*off;
+    const on = active && ENDS[active].rwy === e.rwy;
+    g.push(`<text x="${lx.toFixed(1)}" y="${ly.toFixed(1)}" text-anchor="middle" dominant-baseline="central"
+              font-size="13" font-weight="800" fill="${on?"var(--rwy-active)":"var(--dim)"}">${r}</text>`);
+  }
+
+  // spot pins — in-frame as dots, out-of-frame as edge markers with a distance
+  const best = state.bestSpotEnd;
+  for (const sPt of spots){
+    const k = sPt.id;
+    const isBest = k === best;
+    const col = isBest ? "var(--pin-best)" : "var(--pin)";
+    const off = offMap.has(k);
+    const px = clamp(X(sPt.x), 14, W-14);
+    const py = clamp(Y(sPt.y), gutTop+16, H-gutBot-10);
+    const tag = esc(SPOT_TAG[k] || k);
+
+    if (off){
+      const up = sPt.y < minY;
+      const ty = up ? 8 : H-8;                       // triangle apex, inside the gutter
+      const by = up ? 18 : H-18;
+      g.push(`<polygon points="${px},${ty} ${px-6},${by} ${px+6},${by}" fill="${col}" opacity=".9"/>`);
+      g.push(`<text x="${px}" y="${up ? 30 : H-22}" text-anchor="middle"
+                font-size="10" font-weight="${isBest?800:600}" fill="${col}">${tag} ${sPt.d.toFixed(1)} km</text>`);
+    } else {
+      g.push(`<circle cx="${px}" cy="${py}" r="${isBest?7:4.5}"
+                fill="${col}" stroke="var(--card)" stroke-width="2"/>`);
+      g.push(`<text x="${px}" y="${(py-11).toFixed(1)}" text-anchor="middle"
+                font-size="10.5" font-weight="${isBest?800:600}" fill="${col}">${tag}</text>`);
+    }
+  }
+
+  // wind arrow — points the way the wind is blowing
+  const wx = state.wx;
+  if (wx && wx.windSpd && wx.windDir !== null && wx.windDir !== undefined){
+    const cx = W-30, cy = 30, r = 15;
+    const to = rad(wx.windDir + 180);
+    const tx = cx + Math.sin(to)*r, ty = cy - Math.cos(to)*r;
+    const bx = cx - Math.sin(to)*r, by = cy + Math.cos(to)*r;
+    g.push(`<circle cx="${cx}" cy="${cy}" r="${r+7}" fill="var(--card)" stroke="var(--line)"/>`);
+    g.push(`<line x1="${bx.toFixed(1)}" y1="${by.toFixed(1)}" x2="${tx.toFixed(1)}" y2="${ty.toFixed(1)}"
+              stroke="var(--ink)" stroke-width="2.4"/>`);
+    const aw = 5.5, ab = 8;
+    const ux = Math.sin(to), uy = -Math.cos(to);
+    g.push(`<polygon points="${tx},${ty} ${tx-ux*ab-uy*aw},${ty-uy*ab+ux*aw} ${tx-ux*ab+uy*aw},${ty-uy*ab-ux*aw}" fill="var(--ink)"/>`);
+    g.push(`<text x="${cx}" y="${cy+r+20}" text-anchor="middle" font-size="10.5" fill="var(--dim)">${wx.windSpd} kt</text>`);
+  }
+
+  // north arrow
+  g.push(`<g transform="translate(22,26)">
+      <line x1="0" y1="12" x2="0" y2="-10" stroke="var(--dim)" stroke-width="1.8"/>
+      <polygon points="0,-15 -4.5,-6 4.5,-6" fill="var(--dim)"/>
+      <text x="0" y="25" text-anchor="middle" font-size="10.5" fill="var(--dim)">N</text></g>`);
+
+  return `<svg viewBox="0 0 ${W.toFixed(1)} ${H.toFixed(1)}" role="img"
+            aria-label="CYWG aerodrome layout, active runway highlighted">${g.join("")}</svg>`;
+}
+
+function legend(st){
+  const rows = Object.keys(SPOTS).filter(k => SPOTS[k]).map(k => {
+    const best = k === st.bestSpotEnd;
+    return `<div class="lg${best?" best":""}">
+      <span class="dot"></span>
+      <span class="nm">${esc(SPOTS[k].name)}</span>
+      <span class="rl">rwy ${k} arr · rwy ${recip(k)} dep</span>
+    </div>`;
+  }).join("");
+  return `<div class="legend">${rows}</div>`;
+}
+
+function prettyApproach(a){
+  return String(a).replace(/\bRWY\b/g, "runway").replace(/\bOR\b/g, "or").replace(/\bAND\b/g, "and");
+}
+
+/* ─────────────────────────── render ─────────────────────────── */
+
+function decode(text){
+  const raw = String(text||"").trim();
+  if (!raw) return { error:"Nothing pasted yet." };
+
+  const atis = parseAtis(raw);
+  const taf  = parseTaf(raw);
+
+  // a standalone METAR is a fallback when no ATIS is present
+  let metar = null;
+  const mi = raw.toUpperCase().search(/\b(METAR|SPECI)\b/);
+  if (mi >= 0){
+    const seg = normalize(raw.slice(mi)).replace(/^(METAR|SPECI)\s+(CYWG\s+)?/,"");
+    const stop = seg.search(/\bTAF\b/);
+    metar = parseWeatherBody(stop > 0 ? seg.slice(0,stop) : seg);
+    const tm = seg.match(/^(\d{6})Z/);
+    if (tm) metar.timeTok = tm[1];
+  }
+
+  if (!atis && !metar) return { error:"Couldn't find a CYWG ATIS or METAR in that text. Paste the whole report — odd line breaks are fine." };
+
+  const st = {};
+  st.wx        = atis ? atis.wx : metar;
+  st.letter    = atis ? atis.letter : null;
+  st.sources   = atis ? atis.sources : ["METAR"];
+  st.approach  = atis ? atis.approach : null;
+  st.rsc       = atis ? atis.rsc : parseRsc(raw);
+  st.remarks   = atis ? atis.remarks : [];
+  st.closures  = [...new Set([...(atis ? atis.closures : []), ...parseClosures(raw)])];
+  st.time      = resolveZulu(atis ? atis.time : (st.wx.timeTok || ""));
+  st.raw       = raw;
+
+  if (atis && atis.rwyStated){
+    st.landing   = atis.landing   || atis.departing;
+    st.departing = atis.departing || atis.landing;
+    st.confidence = "stated";
+    st.why = `stated in ATIS ${atis.letter}: ${atis.rwyPhrase}`;
+    st.comp = components(st.wx, st.closures);
+  } else {
+    const inf = inferRunway(st.wx, st.closures);
+    st.landing = inf.runway ? [inf.runway] : null;
+    st.departing = st.landing;
+    st.confidence = inf.confidence === "confident" ? "inferred" : inf.confidence;
+    st.why = inf.why;
+    st.comp = inf.comp;
+    st.inferred = true;
+  }
+
+  // if a closure contradicts a stated runway, say so loudly rather than silently
+  if (st.landing && st.closures.includes(st.landing[0])){
+    st.conflict = `NOTAM says runway ${st.landing[0]} is closed, but the ATIS states it. Trust the newer source.`;
+  }
+
+  st.spots = pickSpots(st.landing, st.departing);
+  st.bestSpotEnd = (st.spots.arrival && st.spots.arrival.spot) ? st.spots.arrival.end
+                 : (st.spots.departure && st.spots.departure.spot) ? st.spots.departure.end : null;
+  st.taf = taf;
+  return st;
+}
+
+function render(st){
+  const out = document.getElementById("out");
+  if (st.error){ out.innerHTML = `<div class="card"><p class="err">${esc(st.error)}</p></div>`; return; }
+
+  const H = [];
+  const L = st.landing ? st.landing.join("/") : "—";
+  const D = st.departing ? st.departing.join("/") : "—";
+  const same = L === D;
+
+  /* hero */
+  const chips = [];
+  chips.push(st.confidence === "stated"
+    ? `<span class="chip stated">stated${st.letter?` · info ${st.letter}`:""}</span>`
+    : `<span class="chip ${st.confidence==="marginal"?"marginal":"inferred"}">${st.confidence==="marginal"?"could be either":"inferred from wind"}</span>`);
+  if (st.wx && st.wx.cat) chips.push(`<span class="chip">${st.wx.cat}</span>`);
+  const age = ageText(st.time);
+  const stale = st.time && (Date.now() - st.time.getTime()) > 90*60*1000;
+  if (age) chips.push(`<span class="chip${stale?" stale":""}">obs ${age}</span>`);
+
+  const arr = st.spots.arrival, dep = st.spots.departure;
+  let spotHTML = "";
+  if (arr && arr.spot){
+    spotHTML = `<div class="spot">→ ${esc(arr.spot.name)}</div>
+                <div class="spot-note">Off the ${arr.end} end for arrivals${arr.spot.range?` — ${esc(arr.spot.range)}`:""}.</div>`;
+    if (dep && dep.spot && dep.end !== arr.end)
+      spotHTML += `<div class="spot-note" style="margin-top:6px">For departures instead: ${esc(dep.spot.name)}${dep.spot.range?` (${esc(dep.spot.range)})`:""} — runway ${D} climb-out.</div>`;
+  } else if (dep && dep.spot){
+    spotHTML = `<div class="spot none">No known spot for ${L} arrivals</div>
+                <div class="spot-note">But ${esc(dep.spot.name)}${dep.spot.range?` (${esc(dep.spot.range)})`:""} catches runway ${D} departures climbing out over it.</div>`;
+  } else {
+    spotHTML = `<div class="spot none">No known spot for this configuration</div>`;
+  }
+
+  H.push(`<div class="card hero">
+    <p class="call">${same ? `RUNWAY ${esc(L)}` : `LAND ${esc(L)}<span class="sep">·</span>DEP ${esc(D)}`}</p>
+    ${spotHTML}
+    <div class="chips">${chips.join("")}</div>
+  </div>`);
+
+  if (st.conflict) H.push(`<div class="card"><p class="err">⚠ ${esc(st.conflict)}</p></div>`);
+
+  /* diagram */
+  H.push(`<div class="card"><h2>Aerodrome</h2>${diagram(st)}${legend(st)}</div>`);
+
+  /* conditions */
+  const cond = [`<p>${esc(wxSentence(st.wx))}</p>`];
+  if (st.approach) cond.push(`<p class="muted">Approach in use: ${esc(prettyApproach(st.approach))}.</p>`);
+  if (st.rsc && st.rsc.runways.length){
+    cond.push(`<h2 style="margin-top:14px">Runway surface</h2><ul>${
+      st.rsc.runways.map(r => `<li>${esc(rscLine(r))}</li>`).join("")}</ul>`);
+    if (st.rsc.crfi !== null) cond.push(`<p class="muted" style="margin-top:6px">CRFI ${st.rsc.crfi.toFixed(2)}</p>`);
+    if (st.rsc.valid) cond.push(`<p class="muted">Valid ${esc(st.rsc.valid)}</p>`);
+  }
+  H.push(`<div class="card"><h2>Conditions</h2>${cond.join("")}</div>`);
+
+  /* sun */
+  const sunEnd = st.bestSpotEnd;
+  if (sunEnd){
+    const mode = (arr && arr.spot && arr.end === sunEnd) ? "arrival" : "departure";
+    const s = sunAdvice(sunEnd, mode, new Date());
+    if (s) H.push(`<div class="card"><h2>Light</h2>
+      <p class="${s.bad?"sun-warn":""}">${esc(s.text)}</p>
+      <p class="muted">Looking ${compass(s.view)} (${s.view.toFixed(0)}°) at ${mode}s${
+        s.s.el>=0?` · sun ${compass(s.s.az)} ${s.s.az.toFixed(0)}°, ${s.s.el.toFixed(0)}° elevation`:""}.</p></div>`);
+  }
+
+  /* remarks */
+  if (st.remarks && st.remarks.length){
+    H.push(`<div class="card"><h2>Notable</h2><ul>${
+      st.remarks.map(r => `<li>${esc(r)}</li>`).join("")}</ul></div>`);
+  }
+
+  /* outlook */
+  if (st.taf){
+    const lines = [];
+    let prev = st.landing ? st.landing[0] : null;
+    for (const g of st.taf){
+      if (g.label === "now") continue;
+      const inf = inferRunway(g.wx, st.closures);
+      if (inf.runway && inf.runway !== prev){
+        lines.push(`<li><strong>${esc(g.label)}</strong> — wind ${g.wx.windVrb?"variable":String(g.wx.windDir).padStart(3,"0")+"°"} at ${g.wx.windSpd} kt${g.wx.windGust?` gusting ${g.wx.windGust}`:""} → expect runway ${inf.runway}</li>`);
+        prev = inf.runway;
+      }
+    }
+    H.push(`<div class="card"><h2>Outlook</h2>${
+      lines.length ? `<ul>${lines.join("")}</ul>`
+                   : `<p class="muted">Forecast wind keeps runway ${esc(st.landing?st.landing[0]:"—")} favoured throughout.</p>`}</div>`);
+  }
+
+  /* details */
+  const rows = [...st.comp].sort((a,b)=>b.head-a.head).map(c => {
+    const winner = st.landing && c.rwy === st.landing[0];
+    return `<tr class="${c.closed?"shut":winner?"win":""}">
+      <td>${c.rwy}${c.closed?" (closed)":""}</td>
+      <td>${c.head>=0?"+":"−"}${Math.abs(c.head).toFixed(1)}</td>
+      <td>${c.cross.toFixed(1)}</td>
+      <td>${ENDS[c.rwy].len.toLocaleString()}</td></tr>`;
+  }).join("");
+
+  H.push(`<div class="card">
+    <details><summary>Wind components — why this runway</summary>
+      <p class="muted" style="margin:8px 0">Basis: ${esc(st.why)}.</p>
+      <table><thead><tr><th>Rwy</th><th>Head kt</th><th>Cross kt</th><th>Length ft</th></tr></thead>
+      <tbody>${rows}</tbody></table>
+      <p class="muted" style="margin-top:8px">Positive headwind is favourable. Winds are true; runway headings are true.</p>
+    </details>
+    <details><summary>Raw text</summary><pre>${esc(st.raw)}</pre></details>
+  </div>`);
+
+  out.innerHTML = H.join("");
+}
+
+/* ─────────────────────────── wiring ─────────────────────────── */
+
+const KEY = "cywg-spotter-paste";
+const $in = document.getElementById("in");
+
+function run(){
+  const v = $in.value;
+  try { localStorage.setItem(KEY, v); } catch(e){}
+  try { render(decode(v)); }
+  catch (err){
+    document.getElementById("out").innerHTML =
+      `<div class="card"><p class="err">Parse failed: ${esc(err.message)}</p>
+       <p class="muted">Paste the full report; odd line breaks are fine.</p></div>`;
+    console.error(err);
+  }
+}
+
+document.getElementById("go").addEventListener("click", run);
+document.getElementById("clr").addEventListener("click", () => {
+  $in.value = "";
+  try { localStorage.removeItem(KEY); } catch(e){}
+  document.getElementById("out").innerHTML = "";
+  $in.focus();
+});
+
+try {
+  const saved = localStorage.getItem(KEY);
+  if (saved){ $in.value = saved; run(); }
+} catch(e){}
+
+// expose for the test harness
+window.CYWG = { normalize, parseWeatherBody, parseAtis, parseRsc, parseTaf, parseClosures,
+                components, inferRunway, pickSpots, decode, resolveZulu, sunPosition, recip, ENDS, SPOTS };
+</script>
+</body>
+</html>
