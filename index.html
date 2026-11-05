@@ -76,7 +76,7 @@ tr.shut td{color:var(--dim);text-decoration:line-through}
 details{margin-top:10px}
 details+details{margin-top:8px}
 summary{cursor:pointer;font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:var(--dim);font-weight:700;padding:6px 0}
-pre{white-space:pre-wrap;word-break:break-word;font:12px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;
+pre{white-space:pre-wrap;word-break:break-word;font:12px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
   color:var(--dim);background:var(--bg);padding:10px;border-radius:8px;margin:8px 0 0;overflow-x:auto}
 .err{color:var(--bad);font-weight:600}
 .muted{color:var(--dim);font-size:13px}
@@ -95,13 +95,16 @@ footer{color:var(--dim);font-size:12px;text-align:center;margin-top:16px;line-he
 <div id="out"></div>
 
 <div class="card">
-  <h2>Paste ATIS</h2>
+  <h2>Paste ATIS <span class="muted" style="font-weight:400;font-size:13px">or</span></h2>
+  <div class="btns" style="margin-bottom:8px">
+    <button id="fetch" class="ghost" style="flex:1">🔄 Fetch live ATIS from atis.guru</button>
+  </div>
   <textarea id="in" placeholder="Paste CYWG ARR or DEP ATIS here.&#10;METAR, TAF and RSC NOTAM text also work." spellcheck="false" autocapitalize="characters"></textarea>
   <div class="btns">
     <button id="go">Decode</button>
     <button id="clr" class="ghost">Clear</button>
   </div>
-  <p class="muted" style="margin-top:10px">Works fully offline — nothing is ever sent anywhere.</p>
+  <p class="muted" style="margin-top:10px">Works fully offline — nothing is ever sent anywhere. Auto-fetch hits atis.guru (CORS-enabled).</p>
 </div>
 
 <footer>
@@ -150,7 +153,7 @@ const deg = r => r * 180 / Math.PI;
 const norm360 = d => ((d % 360) + 360) % 360;
 // smallest absolute angle between two bearings, 0..180
 const angDiff = (a,b) => { const d = Math.abs(norm360(a) - norm360(b)); return d > 180 ? 360 - d : d; };
-const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&","<":"<",">":">","\"":"\""}[c]));
 const compass = b => ["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"][Math.round(norm360(b)/22.5)%16];
 
 /* THE critical normalization. The real feed hard-wraps mid-report at an arbitrary
@@ -925,6 +928,46 @@ function render(st){
 
   out.innerHTML = H.join("");
 }
+
+/* ─────────────────────────── atis.guru auto-fetch ─────────────────────────── */
+
+async function fetchAtisGuru() {
+  const btn = document.getElementById('fetch');
+  const ta = document.getElementById('in');
+  btn.disabled = true;
+  btn.textContent = '⏳ Fetching…';
+  try {
+    const res = await fetch('https://atis.guru/atis/CYWG', { mode: 'cors', credentials: 'omit' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const html = await res.text();
+
+    // Extract .atis divs from raw HTML (SSR content is after </html>, not parsed by DOMParser)
+    const regex = /<div class="atis">([\s\S]*?)<\/div>/g;
+    const parts = [];
+    let match;
+    while ((match = regex.exec(html)) !== null) {
+      let text = match[1];
+      // Decode common HTML entities
+      text = text.replace(/&#xA;/g, '\n').replace(/&#xD;/g, '\r')
+                 .replace(/&/g, '&').replace(/</g, '<').replace(/>/g, '>')
+                 .replace(/"/g, '"').replace(/'/g, "'");
+      parts.push(text.trim());
+    }
+
+    if (!parts.length) throw new Error('No ATIS data found in page');
+
+    // Join with double newline for the parser
+    ta.value = parts.join('\n\n');
+    btn.textContent = '✅ Loaded — click Decode';
+    setTimeout(() => { btn.disabled = false; btn.textContent = '🔄 Fetch live ATIS from atis.guru'; }, 3000);
+  } catch (e) {
+    btn.textContent = '❌ ' + e.message;
+    setTimeout(() => { btn.disabled = false; btn.textContent = '🔄 Fetch live ATIS from atis.guru'; }, 5000);
+    console.error(e);
+  }
+}
+
+document.getElementById('fetch').addEventListener('click', fetchAtisGuru);
 
 /* ─────────────────────────── wiring ─────────────────────────── */
 
