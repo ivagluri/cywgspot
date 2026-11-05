@@ -937,22 +937,22 @@ async function fetchAtisGuru() {
   btn.disabled = true;
   btn.textContent = '⏳ Fetching…';
   try {
-    const res = await fetch('https://atis.guru/atis/CYWG', { mode: 'cors', credentials: 'omit' });
+    const res = await fetch('https://r.jina.ai/http://atis.guru/atis/CYWG', { mode: 'cors', credentials: 'omit' });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const html = await res.text();
 
-    // Extract .atis divs from raw HTML (SSR content is after </html>, not parsed by DOMParser)
-    const regex = /<div class="atis">([\s\S]*?)<\/div>/g;
+    // jina.ai returns markdown - extract ATIS sections
+    // Look for patterns like "CYWG ARR ATIS", "CYWG DEP ATIS", "METAR CYWG", "TAF CYWG"
     const parts = [];
-    let match;
-    while ((match = regex.exec(html)) !== null) {
-      let text = match[1];
-      // Decode common HTML entities
-      text = text.replace(/&#xA;/g, '\n').replace(/&#xD;/g, '\r')
-                 .replace(/&/g, '&').replace(/</g, '<').replace(/>/g, '>')
-                 .replace(/"/g, '"').replace(/'/g, "'");
-      parts.push(text.trim());
-    }
+    // More precise patterns - stop at markdown headers (###) or next section
+    const arrMatch = html.match(/CYWG ARR ATIS [A-Z] [\s\S]*?(?=(?:###|CYWG DEP ATIS|METAR|TAF|$))/);
+    const depMatch = html.match(/CYWG DEP ATIS [A-Z] [\s\S]*?(?=(?:###|METAR|TAF|$))/);
+    const metarMatch = html.match(/METAR CYWG [\s\S]*?(?=(?:###|TAF|$))/);
+    const tafMatch = html.match(/TAF CYWG [\s\S]*?(?=(?:###|$|CYWG ARR ATIS|CYWG DEP ATIS|METAR))/);
+    if (arrMatch) parts.push(arrMatch[0].trim());
+    if (depMatch) parts.push(depMatch[0].trim());
+    if (metarMatch) parts.push(metarMatch[0].trim());
+    if (tafMatch) parts.push(tafMatch[0].trim());
 
     if (!parts.length) throw new Error('No ATIS data found in page');
 
